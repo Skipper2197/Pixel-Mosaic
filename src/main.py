@@ -6,10 +6,12 @@ from skimage import color
 import pickle
 from tqdm import tqdm
 
-IMAGE_DIR = 'data/1m_faces_55'
-TARGET_IMAGE = 'data/dwayne-johnson-walk-of-fame-honor.webp'
-OUTPUT_IMAGE = 'test.jpg'
-PKL_PATH = 'color_tree.pkl'
+BASE_DIR = '/sciclone/scr10/gzdata440/Pixel-Mosaic'
+IMAGE_DIR = os.path.join(BASE_DIR, 'data/1m_faces_55')
+TARGET_IMAGE = os.path.join(BASE_DIR, 'data/dwayne-johnson-walk-of-fame-honor.webp')
+OUTPUT_IMAGE = os.path.join(BASE_DIR, 'test.jpg')
+PKL_PATH = os.path.join(BASE_DIR, 'color_tree.pkl')
+
 GRID_SIZE = (100, 100) # 100x100 grid
 
 def get_avg_lab_magick(img_path):
@@ -40,7 +42,7 @@ def build_and_save_library(source_dir, pkl_output):
     all_files = [f for f in os.listdir(source_dir)]
     
     print(f"Indexing images from {source_dir}...")
-    for img_name in tqdm(all_files, desc='Processing Images to Tree', unit='img'):
+    for img_name in tqdm(all_files, desc='Processing Images to Tree', unit='img', mininterval=10):
         path = os.path.join(source_dir, img_name)
         lab = get_avg_lab_magick(path)
         
