@@ -81,16 +81,28 @@ def build_library():
 def generate_mosaic(data, target_path, output_name, grid):
     tree, filenames = data['tree'], data['filenames']
     
-    print("Analyzing target image colors...")
+
+    # This resizes to the grid and outputs every pixel as a line of text
     cmd = [
         "magick", target_path,
         "-resize", f"{grid[0]}x{grid[1]}!",
         "-colorspace", "Lab",
-        "-format", "%[fx:u.p{0,0}.r*100] %[fx:u.p{0,0}.g*255-128] %[fx:u.p{0,0}.b*255-128]\n",
-        "info:"
+        "-format", "%[fx:u*100] %[fx:v*255-128] %[fx:w*255-128]\n", 
+        "txt:" # Use the txt: delegate to stream all pixels
     ]
-    raw_output = subprocess.check_output(cmd).decode('utf-8').splitlines()
-    target_lab = [list(map(float, line.split())) for line in raw_output if line.strip()]
+    # We skip the first line because it's header info from the 'txt:' format
+    raw_output = subprocess.check_output(cmd).decode('utf-8').splitlines()[1:]
+    
+    target_lab = []
+    for line in raw_output:
+        # Extract just the color values from the ImageMagick txt output
+        # Example line: 0,0: (25.1, -2, 14) #ABCDEF lab(25.1%, -2, 14)
+        if '(' in line:
+            parts = line.split('(')[1].split(')')[0].replace(',', ' ').split()
+            target_lab.append([float(x) for x in parts[:3]])
+
+    print(f"Target color list length: {len(target_lab)}") 
+    # This SHOULD be 10000 (100x100)
 
     print("Matching tiles...")
     _, indices = tree.query(target_lab)
