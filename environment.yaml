@@ -8,6 +8,5 @@ dependencies:
   - scipy
   - scikit-image
   - tqdm
-  - imagemagick
   - pillow
   - pip

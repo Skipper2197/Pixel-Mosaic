@@ -27,7 +27,6 @@ else
         scipy \
         scikit-image \
         tqdm \
-        imagemagick \
         pillow \
         -c conda-forge
 fi
