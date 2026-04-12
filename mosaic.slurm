@@ -3,8 +3,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=02:00:00
-#SBATCH --mem=128G
+#SBATCH --time=20:00
+#SBATCH --mem=64G
 #SBATCH --mail-type=FAIL,BEGIN,END
 #SBATCH --mail-user=incullicott@wm.edu               # change this!
 #SBATCH -o /sciclone/home/incullicott/Pixel-Mosaic/pixel_%j.out # change this!
@@ -34,5 +34,5 @@ fi
 # 3. Activate and Run
 conda activate $ENV_NAME
 
-python src/main2.py
+python src/lab.py
 

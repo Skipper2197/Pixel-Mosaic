@@ -7,12 +7,14 @@ from tqdm import tqdm
 from skimage import color  # Efficient LAB conversion
 
 # --- CONFIGURATION ---
-SOURCE_DIR = './data/raw/1m_faces_55'
-THUMB_DIR = './data/thumbnails/face_thumbnails'
-# TARGET_IMAGE = './data/dwayne-johnson-walk-of-fame-honor.webp'
-TARGET_IMAGE = './data/target/dwayne_johnson.jpg'
+SHARED_DIR = '/sciclone/scr10/gzdata440/Pixel-Mosaic/data'
 
-OUTPUT_IMAGE = './output/mosaic_lab_2.jpg'
+SOURCE_DIR = f'{SHARED_DIR}/raw/1m_faces_55'
+THUMB_DIR = f'{SHARED_DIR}/thumbnails/face_thumbnails'
+TARGET_IMAGE = f'{SHARED_DIR}/dwayne-johnson-walk-of-fame-honor.webp'
+# TARGET_IMAGE = './data/target/dwayne_johnson.jpg'
+
+OUTPUT_IMAGE = './output/mosaic_lab_slurm.jpg'
 PKL_PATH = './color_trees/color_tree_lab_avg_2.pkl'  # Updated name to avoid loading old RGB data
 
 GRID_SIZE = (200, 200)
@@ -157,42 +159,6 @@ def generate_mosaic(data, target_path):
 
     print(f"Saving final LAB result to {OUTPUT_IMAGE}...")
     canvas.save(OUTPUT_IMAGE, quality=95)
-
-# def generate_mosaic(data, target_path):
-#     tree, filenames = data['tree'], data['filenames']
-
-#     print("Converting target image to LAB space...")
-#     with Image.open(target_path) as target:
-#         target = target.convert('RGB')
-#         target_small = target.resize(GRID_SIZE, resample=Image.LANCZOS)
-#         target_lab = color.rgb2lab(np.array(target_small) / 255.0).reshape(-1, 3)
-
-#     print("Matching tiles...")
-#     _, indices = tree.query(target_lab)
-
-#     print("Assembling canvas...")
-#     canvas_w, canvas_h = GRID_SIZE[0] * TILE_SIZE, GRID_SIZE[1] * TILE_SIZE
-#     canvas = Image.new('RGB', (canvas_w, canvas_h))
-
-#     for i, idx in enumerate(tqdm(indices, desc="Pasting Tiles")):
-#         x = (i % GRID_SIZE[0]) * TILE_SIZE
-#         y = (i // GRID_SIZE[0]) * TILE_SIZE
-        
-#         # Now we open the pre-processed thumbnails (very fast)
-#         with Image.open(filenames[idx]) as tile:
-#             canvas.paste(tile, (x, y))
-
-#     print(f"Saving to {OUTPUT_IMAGE}...")
-#     canvas.save(OUTPUT_IMAGE, quality=95)
-
-# def main():
-#     if not os.path.exists(SOURCE_DIR):
-#         print(f"Error: Directory '{SOURCE_DIR}' not found.")
-#         return
-    
-#     data = build_library()
-#     generate_mosaic(data, TARGET_IMAGE)
-#     print("\nDone! The LAB mosaic is complete.")
 
 def main():
     if not os.path.exists(SOURCE_DIR):
