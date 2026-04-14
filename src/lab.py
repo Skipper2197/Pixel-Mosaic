@@ -9,13 +9,13 @@ from skimage import color  # Efficient LAB conversion
 # --- CONFIGURATION ---
 SHARED_DIR = '/sciclone/scr10/gzdata440/Pixel-Mosaic/data'
 
-SOURCE_DIR = f'{SHARED_DIR}/raw/1m_faces_55'
-THUMB_DIR = f'{SHARED_DIR}/thumbnails/face_thumbnails'
+SOURCE_DIR = f'{SHARED_DIR}/raw/flowers'
+THUMB_DIR = f'{SHARED_DIR}/thumbnails/flowers'
 TARGET_IMAGE = f'{SHARED_DIR}/dwayne-johnson-walk-of-fame-honor.webp'
 # TARGET_IMAGE = './data/target/dwayne_johnson.jpg'
 
-OUTPUT_IMAGE = './output/mosaic_lab_slurm.jpg'
-PKL_PATH = './color_trees/color_tree_lab_avg_2.pkl'  # Updated name to avoid loading old RGB data
+OUTPUT_IMAGE = './output/mosaic_lab_slurm_flowers.jpg'
+PKL_PATH = './color_trees/color_tree_flowers.pkl'  # Updated name to avoid loading old RGB data
 
 GRID_SIZE = (200, 200)
 TILE_SIZE = 32
