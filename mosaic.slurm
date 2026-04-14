@@ -3,14 +3,14 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=20:00
-#SBATCH --mem=64G
+#SBATCH --time=02:00:00
+#SBATCH --mem=128G
 #SBATCH --mail-type=FAIL,BEGIN,END
-#SBATCH --mail-user=incullicott@wm.edu               # change this!
-#SBATCH -o /sciclone/home/incullicott/Pixel-Mosaic/pixel_%j.out # change this!
-#SBATCH -e /sciclone/home/incullicott/Pixel-Mosaic/pixel_%j.err # change this!
-
+#SBATCH --mail-user=ksswaminathan@wm.edu               # change this!
+#SBATCH -o /sciclone/home/ksswaminathan/SUPERCOMPUTING/Final/Pixel-Mosaic/pixel_%j.out # change this!
+#SBATCH -e /sciclone/home/ksswaminathan/SUPERCOMPUTING/Final/Pixel-Mosaic/pixel_%j.err # change this!
 # Load the conda/mamba module
+
 module load miniforge3
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
