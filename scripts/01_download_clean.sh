@@ -1,9 +1,9 @@
 #!/bin/bash
 # =============================================================================
 # 01_download_clean.sh
-# Downloads a small subset of the 1M Fake Faces dataset from Kaggle,
-# validates the images with ImageMagick, and organizes them into
-# raw/ and clean/ directories.
+# Downloads a subset of the 1M Fake Faces dataset from Kaggle,
+# validates the images with ImageMagick, and merges them into the
+# shared data/clean/ directory.
 #
 # Usage:
 #   bash scripts/01_download_clean.sh [--subset N]
@@ -13,48 +13,51 @@
 #
 # Requirements:
 #   - KAGGLE_API_TOKEN environment variable set (see README)
-#   - conda environment 'mosaic-env' active (run setup_env.sh first)
-#   - ImageMagick available in the active environment
+#   - conda environment 'mosaic_env' active (run setup_env.sh first)
+#   - ImageMagick and unzip available in the active environment
 #
 # Outputs:
-#   data/raw/       — original downloaded images (untouched)
-#   data/clean/     — validated, non-corrupt JPEGs ready for thumbnailing
+#   data/raw_faces/  — original downloaded zip and extracted images
+#   data/clean/      — validated JPEGs (prefixed with 'face_' to avoid
+#                      filename collisions with other sources)
+#
+# Design note:
+#   Previous versions of this script used 'kaggle datasets download --file'
+#   to fetch files individually. That code path has a long-standing bug in
+#   Kaggle's API (Issue #508 on Kaggle/kaggle-api) which returns 404 for
+#   most individual-file downloads even when the same dataset lists fine
+#   with 'kaggle datasets files'. The whole-zip download used here avoids
+#   that bug entirely — it's Kaggle's well-tested primary path.
 # =============================================================================
 
-# Taught in class (assignment_05/06): exits immediately on any error,
-# unset variable, or failed pipe.
+# Taught in class (assignment_05/06)
 set -ueo pipefail
 
 # ---------------------------------------------------------------------------
-# Configuration — taught in class: variables use ALL_CAPS by convention
+# Configuration
 # ---------------------------------------------------------------------------
-DATASET="tunguz/1-million-fake-faces-4"  # Kaggle dataset identifier (owner/dataset-name)
-SUBSET_SIZE=500                           # default images to keep for local practice
-RAW_DIR="data/raw"
-CLEAN_DIR="data/clean"
-THUMB_DIR="data/thumbnails"
+DATASET="tunguz/1-million-fake-faces-4"   # Kaggle dataset identifier
+SUBSET_SIZE=500                            # default images to keep
+RAW_DIR="data/raw_faces"                   # source-specific raw dir
+CLEAN_DIR="data/clean"                     # SHARED clean dir
 LOG_DIR="log"
 
+# Prefix applied when copying into the shared clean/ directory.
+# Prevents filename collisions when multiple sources (faces, lhq, etc.)
+# feed the same clean directory. See 01b_download_lhq.sh for the
+# symmetrical pattern.
+FILE_PREFIX="face_"
+
 # ---------------------------------------------------------------------------
-# Argument parsing — NOT taught in class
-#
-# $# is a special bash variable that holds the number of arguments passed
-# to the script. We loop while there are still arguments left to read.
-#
-# 'case' works like a switch statement — it matches $1 (the current argument)
-# against patterns and runs the matching block.
-#
-# 'shift N' discards the first N positional arguments, sliding the rest
-# down so $2 becomes $1, etc. We shift 2 after --subset because we consume
-# both the flag ("--subset") and its value ("500") at once.
-#
-# Reference: https://www.gnu.org/software/bash/manual/bash.html#Special-Parameters
+# Argument parsing
+# See the inline comments in 01b_download_lhq.sh (or an earlier version
+# of this script) for a full explanation of $#, case, and shift.
 # ---------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --subset)
             SUBSET_SIZE="$2"
-            shift 2          # consume both --subset and the number after it
+            shift 2
             ;;
         *)
             echo "Unknown argument: $1"
@@ -66,7 +69,6 @@ done
 
 # ---------------------------------------------------------------------------
 # Ensure we are running from the project root
-# Taught in class: -f tests whether a regular file exists
 # ---------------------------------------------------------------------------
 if [[ ! -f "pipeline.sh" ]]; then
     echo "[ERROR] Please run this script from the Pixel-Mosaic project root."
@@ -75,31 +77,20 @@ if [[ ! -f "pipeline.sh" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Create directory structure — taught in class: mkdir -p makes parent dirs
+# Create directory structure
 # ---------------------------------------------------------------------------
 echo "[01] Creating directory structure..."
-mkdir -p "$RAW_DIR" "$CLEAN_DIR" "$THUMB_DIR" "$LOG_DIR" src
+mkdir -p "$RAW_DIR" "$CLEAN_DIR" "$LOG_DIR" src
 
 # ---------------------------------------------------------------------------
-# Check for the Kaggle API token — NOT fully taught in class
-#
-# Kaggle's newer CLI uses an environment variable (KAGGLE_API_TOKEN) instead
-# of a JSON credentials file. We check whether the variable is set and
-# non-empty using bash parameter expansion:
-#
-#   ${VARIABLE:-}   means "use $VARIABLE, or an empty string if unset"
-#
-# This is needed because set -u would cause an error if we referenced an
-# unset variable directly. The -z flag tests whether a string is empty.
-#
-# Reference: https://www.kaggle.com/docs/api#authentication
+# Check for the Kaggle API token
 # ---------------------------------------------------------------------------
 echo "[02] Checking Kaggle API token..."
 if [[ -z "${KAGGLE_API_TOKEN:-}" ]]; then
     echo ""
     echo "[ERROR] KAGGLE_API_TOKEN environment variable is not set."
     echo ""
-    echo "  To fix this, add the following to your ~/.bashrc (or ~/.zshrc on Mac):"
+    echo "  To fix this, add the following to your ~/.bashrc:"
     echo "    export KAGGLE_API_TOKEN=your_token_here"
     echo "  Then reload your shell:"
     echo "    source ~/.bashrc"
@@ -111,150 +102,154 @@ fi
 echo "    Token found."
 
 # ---------------------------------------------------------------------------
-# Check that required tools are installed and on PATH — NOT taught in class
-#
-# 'command -v' is the POSIX-standard way to test whether a command exists
-# on your PATH. It prints the full path if found, nothing if not found.
-# We redirect both stdout and stderr to /dev/null so nothing prints to
-# the terminal — we only care about the exit code (0 = found, 1 = not found).
-#
-#   &>  redirects both stdout (1) and stderr (2) simultaneously
-#   /dev/null is a special file that discards everything written to it
-#
-# We loop over both tools so we catch all missing dependencies at once
-# rather than failing one at a time.
-#
-# Reference: https://www.gnu.org/software/bash/manual/bash.html#Bash-Builtins
+# Check that required tools are installed (kaggle, magick, unzip)
 # ---------------------------------------------------------------------------
 echo "[03] Checking required tools..."
-for tool in kaggle magick; do
+for tool in kaggle magick unzip; do
     if ! command -v "$tool" &> /dev/null; then
         echo "[ERROR] '$tool' command not found."
-        echo "        Activate your conda environment: conda activate mosaic-env"
+        echo "        Activate your conda environment: conda activate mosaic_env"
         exit 1
     fi
 done
-echo "    kaggle and magick found."
+echo "    kaggle, magick, and unzip found."
 
 # ---------------------------------------------------------------------------
-# Get the list of files in the dataset — NOT taught in class
+# Download the dataset as a single zip
 #
-# This dataset has no zip archive — files are individual JPEGs nested inside
-# folders. We use 'kaggle datasets files' to retrieve the full file listing,
-# then extract just the file paths (column 1) and filter to JPEGs only.
+# 'kaggle datasets download' with NO --file flag downloads the whole
+# dataset as a single zip archive. This is Kaggle's primary, well-tested
+# download path and it works reliably — unlike 'kaggle datasets download
+# --file <path>' which has a long-standing 404 bug on many datasets
+# (see Kaggle/kaggle-api#508).
 #
-# Flags used:
-#   --csv     output as comma-separated values so we can reliably parse it
-#             (default output is a human-readable table with variable spacing)
+# Flags:
+#   --path      directory where the zip is saved
+#   --force     re-download even if already present
+#              (we guard this with our own stamp file below)
 #
-# Pipeline breakdown:
-#   tail -n +2        skip the CSV header row (name,size,creationDate)
-#   cut -d',' -f1     extract only the first column (the file path)
-#   grep -i '\.jpg'   keep only JPEG filenames (case-insensitive)
-#   head -n N         take only the first N paths for our practice subset
-#
-# Reference: https://www.kaggle.com/docs/api#interacting-with-datasets
-# ---------------------------------------------------------------------------
-echo "[04] Fetching file list from Kaggle (this may take a moment)..."
-
-FILE_LIST="$LOG_DIR/kaggle_file_list.txt"
-
-kaggle datasets files "$DATASET" --csv \
-    | tail -n +2 \
-    | cut -d',' -f1 \
-    | grep -i '\.jpg' \
-    | head -n "$SUBSET_SIZE" \
-    > "$FILE_LIST"
-
-AVAILABLE=$(wc -l < "$FILE_LIST")
-echo "    Found $AVAILABLE files to download (requested: $SUBSET_SIZE)"
-
-if [[ "$AVAILABLE" -eq 0 ]]; then
-    echo "[ERROR] No files found in dataset listing. Check your Kaggle token and dataset name."
-    exit 1
-fi
-
-# ---------------------------------------------------------------------------
-# Download each file individually — NOT taught in class
-#
-# Because the dataset contains no zip, we loop over each path in our list
-# and download them one at a time using 'kaggle datasets download --file'.
-#
-# Stamp file pattern: we write a stamp after all downloads complete so
-# that re-running the script skips the download entirely. This is the same
-# HPC pattern used in assignment_05 to avoid re-running expensive steps.
-#
-# 'kaggle datasets download --file' flags:
-#   --file     path of a single file within the dataset to download
-#   --path     local directory to place the downloaded file
-#   --quiet    suppress progress bar output
-#   --force    overwrite if the file already exists locally
+# Stamp file pattern: write a marker file after success so re-running
+# the script skips the download. HPC idempotency pattern from
+# assignment_05. The stamp is NOT written unless the downloaded zip
+# actually exists on disk — the old "trust the loop's exit code" bug
+# cannot recur because we verify the filesystem directly.
 #
 # Reference: https://www.kaggle.com/docs/api#interacting-with-datasets
 # ---------------------------------------------------------------------------
 DOWNLOAD_STAMP="$RAW_DIR/.downloaded"
+ZIP_FILE="$RAW_DIR/fake-faces.zip"
 
-if [[ -f "$DOWNLOAD_STAMP" ]]; then
-    echo "[05] Skipping download — stamp file found ($DOWNLOAD_STAMP)."
+if [[ -f "$DOWNLOAD_STAMP" && -f "$ZIP_FILE" ]]; then
+    echo "[04] Skipping download — stamp file found ($DOWNLOAD_STAMP)."
     echo "     Delete $DOWNLOAD_STAMP to force a re-download."
 else
-    echo "[05] Downloading $AVAILABLE images to $RAW_DIR/..."
-    count=0
-    while IFS= read -r filepath; do
-        kaggle datasets download "$DATASET" \
-            --file "$filepath" \
-            --path "$RAW_DIR" \
-            --quiet \
-            --force
+    # If stamp exists but zip doesn't, the previous run lied to us —
+    # delete the stamp and re-download cleanly.
+    if [[ -f "$DOWNLOAD_STAMP" ]]; then
+        echo "[04] Stamp present but zip missing — clearing stale stamp."
+        rm "$DOWNLOAD_STAMP"
+    fi
 
-        ((count++)) || true
+    echo "[04] Downloading 1M Fake Faces archive from Kaggle..."
+    echo "     (This dataset is several GB — may take a while on first run)"
 
-        # Print progress every 50 files so we know it's still running
-        if (( count % 50 == 0 )); then
-            echo "     Downloaded $count / $AVAILABLE"
-        fi
-    done < "$FILE_LIST"
+    kaggle datasets download "$DATASET" \
+        --path "$RAW_DIR" \
+        --force
 
-    echo "     Download complete: $count files."
-    touch "$DOWNLOAD_STAMP"
+    # Kaggle names the zip after the dataset slug. Rename defensively
+    # via find rather than hardcoding the exact filename.
+    DOWNLOADED_ZIP=$(find "$RAW_DIR" -maxdepth 1 -iname "*.zip" | head -n 1)
+
+    if [[ -z "$DOWNLOADED_ZIP" ]]; then
+        echo "[ERROR] No zip file found in $RAW_DIR after download."
+        echo "        Check that your Kaggle token is valid and you have"
+        echo "        accepted the dataset's terms on kaggle.com."
+        exit 1
+    fi
+
+    mv "$DOWNLOADED_ZIP" "$ZIP_FILE"
+
+    # "Trust but verify" — only write the stamp after confirming the
+    # zip is actually present. This is the lesson from the stale-stamp
+    # bug that caused 01_download_clean.sh to report success when
+    # nothing had downloaded.
+    if [[ -f "$ZIP_FILE" ]]; then
+        touch "$DOWNLOAD_STAMP"
+        echo "     Download complete: $ZIP_FILE"
+    else
+        echo "[ERROR] Zip file missing after rename. Not writing stamp."
+        exit 1
+    fi
 fi
 
 # ---------------------------------------------------------------------------
-# Count raw images — NOT fully taught in class
+# Extract only the first SUBSET_SIZE images from the zip
 #
-# 'find' was introduced in class but these flags are new:
-#   -maxdepth 3   look up to 3 levels deep to catch files in subfolders
-#   -iname        case-insensitive name match ("*.JPG" matches "*.jpg" too)
-#   -o            logical OR between -iname patterns (must be wrapped in \( \))
+# This uses the same pattern as 01b_download_lhq.sh:
+#   unzip -Z1 ZIP     list archive contents, one filename per line
+#   grep -i '\.jpg$'  keep only .jpg entries
+#   head -n N         take the first N
+#   xargs ... unzip   extract just those files
 #
-# 'wc -l' counts lines in the output — one filename per line = image count.
+# The -j flag on unzip flattens paths — files extract directly into
+# $RAW_DIR instead of recreating the dataset's internal folder nesting.
+# That simplifies the validation loop below (no -maxdepth needed).
 #
-# Reference: https://man7.org/linux/man-pages/man1/find.1.html
+# Reference: https://linux.die.net/man/1/unzip
 # ---------------------------------------------------------------------------
-TOTAL_RAW=$(find "$RAW_DIR" -maxdepth 3 \
+EXTRACT_STAMP="$RAW_DIR/.extracted"
+
+if [[ -f "$EXTRACT_STAMP" ]]; then
+    echo "[05] Skipping extraction — stamp file found ($EXTRACT_STAMP)."
+    echo "     Delete $EXTRACT_STAMP to force re-extraction."
+else
+    echo "[05] Extracting first $SUBSET_SIZE images from archive..."
+
+    FILE_LIST="$LOG_DIR/faces_extract_list.txt"
+
+    unzip -Z1 "$ZIP_FILE" \
+        | grep -i '\.jpg$' \
+        | head -n "$SUBSET_SIZE" \
+        > "$FILE_LIST"
+
+    EXTRACT_COUNT=$(wc -l < "$FILE_LIST")
+    echo "     Will extract $EXTRACT_COUNT images."
+
+    if [[ "$EXTRACT_COUNT" -eq 0 ]]; then
+        echo "[ERROR] No .jpg files found inside $ZIP_FILE."
+        exit 1
+    fi
+
+    # xargs -a reads arg list from file; -d '\n' splits on newlines
+    # (defensive in case a filename ever contains a space)
+    # unzip -j flattens output into $RAW_DIR
+    # unzip -o overwrites without prompting
+    xargs -a "$FILE_LIST" -d '\n' unzip -j -o "$ZIP_FILE" -d "$RAW_DIR" > /dev/null
+
+    touch "$EXTRACT_STAMP"
+    echo "     Extraction complete."
+fi
+
+# ---------------------------------------------------------------------------
+# Count raw images
+# -maxdepth 1 because we flattened via unzip -j
+# ---------------------------------------------------------------------------
+TOTAL_RAW=$(find "$RAW_DIR" -maxdepth 1 \
     \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) \
     | wc -l)
 echo "[06] Raw images found: $TOTAL_RAW"
 
 if [[ "$TOTAL_RAW" -eq 0 ]]; then
-    echo "[ERROR] No images found in $RAW_DIR after download."
+    echo "[ERROR] No images found in $RAW_DIR after extraction."
     exit 1
 fi
 
 # ---------------------------------------------------------------------------
-# Validate images using ImageMagick — NOT taught in class
+# Validate images with ImageMagick and copy to shared clean/ with prefix
 #
-# 'magick identify' reads an image file and prints its properties
-# (format, dimensions, color depth, etc.). Crucially, it returns a
-# non-zero exit code if the file is corrupt or unreadable, making it
-# a reliable validator. We only care about the exit code, so we
-# redirect output to /dev/null.
-#
-# If the file passes validation we copy it as-is with 'cp'. There is
-# no need to re-encode here because 02_build_database.sh will resize
-# every image to 32x32, which normalizes them at that stage.
-#
-# Reference: https://imagemagick.org/script/identify.php
+# Same namespace-on-merge pattern as 01b_download_lhq.sh. Output name:
+#   raw_faces/00001.jpg  ->  clean/face_00001.jpg
 # ---------------------------------------------------------------------------
 echo "[07] Validating images with magick identify..."
 
@@ -263,25 +258,24 @@ skipped=0
 LOG_FILE="$LOG_DIR/01_validation.log"
 
 {
-    echo "Validation log — target subset: $SUBSET_SIZE"
+    echo "Faces validation log — target subset: $SUBSET_SIZE"
     echo "Tool: magick identify"
+    echo "Output prefix: $FILE_PREFIX"
     echo ""
 } > "$LOG_FILE"
 
-# Taught in class: for loop iterating over output of a subshell command
-for img in $(find "$RAW_DIR" -maxdepth 3 -iname "*.jpg"); do
+for img in $(find "$RAW_DIR" -maxdepth 1 -iname "*.jpg"); do
 
-    # Run magick identify; skip the file if it returns a non-zero exit code
     if ! magick identify "$img" &> /dev/null; then
         echo "SKIP  $(basename "$img") — failed magick identify" >> "$LOG_FILE"
         ((skipped++)) || true
         continue
     fi
 
-    # File is valid — copy it as-is to data/clean/
-    cp "$img" "$CLEAN_DIR/$(basename "$img")"
+    out_name="${FILE_PREFIX}$(basename "$img")"
+    cp "$img" "$CLEAN_DIR/$out_name"
 
-    echo "OK    $(basename "$img")" >> "$LOG_FILE"
+    echo "OK    $out_name" >> "$LOG_FILE"
     ((valid++)) || true
 
 done
@@ -303,15 +297,18 @@ fi
 # ---------------------------------------------------------------------------
 # Final summary
 # ---------------------------------------------------------------------------
-CLEAN_COUNT=$(find "$CLEAN_DIR" -maxdepth 1 -iname "*.jpg" | wc -l)
+TOTAL_CLEAN=$(find "$CLEAN_DIR" -maxdepth 1 -iname "*.jpg" | wc -l)
+FACES_IN_CLEAN=$(find "$CLEAN_DIR" -maxdepth 1 -iname "${FILE_PREFIX}*.jpg" | wc -l)
 
 echo ""
 echo "============================================================"
 echo "  01_download_clean.sh complete"
 echo "------------------------------------------------------------"
-echo "  Raw images   : $RAW_DIR/    ($TOTAL_RAW total)"
-echo "  Clean images : $CLEAN_DIR/  ($CLEAN_COUNT ready)"
-echo "  Log          : $LOG_FILE"
+echo "  Raw faces         : $RAW_DIR/    ($TOTAL_RAW total)"
+echo "  Faces in clean/   : $FACES_IN_CLEAN (prefixed '${FILE_PREFIX}')"
+echo "  Clean total       : $CLEAN_DIR/  ($TOTAL_CLEAN images from all sources)"
+echo "  Log               : $LOG_FILE"
 echo "============================================================"
 echo ""
-echo "Next step: bash scripts/02_build_database.sh"
+echo "Next step: bash scripts/01b_download_lhq.sh  (optional second source)"
+echo "       or: bash scripts/02_build_thumbnails.sh"
