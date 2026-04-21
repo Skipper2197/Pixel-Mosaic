@@ -37,8 +37,11 @@ set -ueo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# Shared data directory on SciClone scratch storage.
+SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
+
 ENV_NAME="mosaic_env"
-PKL_PATH="data/color_tree.pkl"
+PKL_PATH="$SHARED_DIR/color_tree.pkl"
 OUTPUT_DIR="output"
 GRID_SIZE=100                              # defaults; overridden by flags
 TILE_SIZE=32

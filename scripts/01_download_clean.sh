@@ -36,10 +36,15 @@ set -ueo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# Shared data directory on SciClone scratch storage.
+# All pipeline stages read/write under this path so the full dataset
+# lives in one place and doesn't need to be duplicated per user.
+SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
+
 DATASET="tunguz/1-million-fake-faces-4"   # Kaggle dataset identifier
 SUBSET_SIZE=500                            # default images to keep
-RAW_DIR="data/raw_faces"                   # source-specific raw dir
-CLEAN_DIR="data/clean"                     # SHARED clean dir
+RAW_DIR="$SHARED_DIR/raw_faces"            # source-specific raw dir
+CLEAN_DIR="$SHARED_DIR/clean"              # SHARED clean dir
 LOG_DIR="log"
 
 # Prefix applied when copying into the shared clean/ directory.

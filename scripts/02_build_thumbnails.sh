@@ -24,9 +24,12 @@ set -ueo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# Shared data directory on SciClone scratch storage.
+SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
+
 ENV_NAME="mosaic_env"                      # must match environment.yaml
-SOURCE_DIR="data/clean"                    # shared clean dir from 01_ / 01b_
-THUMB_DIR="data/thumbnails"
+SOURCE_DIR="$SHARED_DIR/clean"             # shared clean dir from 01_ / 01b_
+THUMB_DIR="$SHARED_DIR/thumbnails"
 TILE_SIZE=32                               # default; overridden by --tile-size
 
 # ---------------------------------------------------------------------------

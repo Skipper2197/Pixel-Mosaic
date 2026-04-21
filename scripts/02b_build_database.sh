@@ -26,9 +26,12 @@ set -ueo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# Shared data directory on SciClone scratch storage.
+SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
+
 ENV_NAME="mosaic_env"
-THUMB_DIR="data/thumbnails"
-PKL_PATH="data/color_tree.pkl"
+THUMB_DIR="$SHARED_DIR/thumbnails"
+PKL_PATH="$SHARED_DIR/color_tree.pkl"
 FORCE_FLAG=""                              # populated by --force
 
 # ---------------------------------------------------------------------------

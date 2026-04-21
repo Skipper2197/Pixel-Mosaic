@@ -15,9 +15,22 @@ Why a shared module?
     essential for the k-d tree lookups to be meaningful.
 """
 
+import os
+
 import numpy as np
 from PIL import Image
 from skimage import color  # skimage provides a vectorized rgb2lab
+
+# ---------------------------------------------------------------------------
+# Shared data directory on SciClone
+#
+# All pipeline stages read from and write to subdirectories under this
+# path. It lives on the scratch filesystem (/sciclone/scr10) because
+# the dataset is too large for home directories. The class group
+# directory (gzdata440) ensures all team members can access the same
+# data without duplicating multi-GB downloads.
+# ---------------------------------------------------------------------------
+SHARED_DIR = '/sciclone/scr10/gzdata440/Pixel-Mosaic/data'
 
 # ---------------------------------------------------------------------------
 # Default tile/grid parameters
@@ -87,7 +100,6 @@ def list_images(directory):
     join them with the directory. This matches how os.listdir works
     and keeps the function composable.
     """
-    import os
     return [
         f for f in os.listdir(directory)
         if f.lower().endswith(IMAGE_EXTENSIONS)
