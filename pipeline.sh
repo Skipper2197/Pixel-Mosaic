@@ -5,7 +5,6 @@
 #
 # Runs every stage in order:
 #   01_download_clean.sh   — download + clean fake faces dataset
-#   01b_download_lhq.sh    — download + clean LHQ landscapes dataset
 #   02_build_thumbnails.sh — resize every clean image to a 32x32 tile
 #   02b_build_database.sh  — build a LAB-color k-d tree over the tiles
 #   03_generate_mosaic.sh  — produce a mosaic of the target image
@@ -34,23 +33,23 @@
 set -ueo pipefail
 
 # ---------------------------------------------------------------------------
+# Shared data directory on SciClone scratch storage
+# ---------------------------------------------------------------------------
+SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
+
+# ---------------------------------------------------------------------------
 # USER SETTINGS — edit these to change how the pipeline runs
 # ---------------------------------------------------------------------------
 
-# Number of images to keep from each downloaded dataset.
+# Number of images to keep from the downloaded dataset.
 # Small values (100-1000) are good for local testing.
 # Large values (10000+) produce better-looking mosaics on the HPC.
 SUBSET=500
 
 # Path to the target image you want to reproduce as a mosaic.
 # The output will be auto-named from this file's basename, e.g.:
-#   data/target/rock.webp → output/mosaic_rock.jpg
-TARGET="data/target/rock.webp"
-
-# Whether to include the LHQ-1024 landscapes dataset as a second
-# source of tiles. Set to "false" to skip 01b entirely — useful if
-# you only want a face-based tile library or want to save disk space.
-USE_LHQ="true"
+#   .../dwayne-johnson-walk-of-fame-honor.webp → output/mosaic_dwayne-johnson-walk-of-fame-honor.jpg
+TARGET="$SHARED_DIR/target/dwayne-johnson-walk-of-fame-honor.webp"
 
 # Mosaic grid and tile size (passed through to 03_generate_mosaic.sh).
 # Defaults match the project spec.
@@ -71,8 +70,6 @@ fi
 
 # Sanity check — make sure the target image actually exists before
 # going through the whole setup only to fail at the last stage.
-# This is the "fail fast" principle: validate inputs up front so
-# long-running operations don't waste time on a doomed run.
 if [[ ! -f "$TARGET" ]]; then
     echo "[ERROR] Target image not found: $TARGET"
     echo "        Edit the TARGET variable at the top of pipeline.sh"
@@ -83,9 +80,9 @@ fi
 echo "============================================================"
 echo "  Pixel-Mosaic pipeline"
 echo "============================================================"
-echo "  Subset size  : $SUBSET images per source"
+echo "  Shared dir   : $SHARED_DIR"
+echo "  Subset size  : $SUBSET images"
 echo "  Target       : $TARGET"
-echo "  Use LHQ      : $USE_LHQ"
 echo "  Grid         : ${GRID_SIZE}x${GRID_SIZE}"
 echo "  Tile         : ${TILE_SIZE}x${TILE_SIZE}"
 echo "============================================================"
@@ -97,20 +94,6 @@ echo ""
 echo ">>> Stage 1: download fake faces"
 bash scripts/01_download_clean.sh --subset "$SUBSET"
 echo ""
-
-# ---------------------------------------------------------------------------
-# Stage 1b — LHQ landscapes download (optional)
-# Run only if USE_LHQ is "true". This lets a user disable the second
-# source without editing any of the 01/02/03 scripts.
-# ---------------------------------------------------------------------------
-if [[ "$USE_LHQ" == "true" ]]; then
-    echo ">>> Stage 1b: download LHQ landscapes"
-    bash scripts/01b_download_lhq.sh --subset "$SUBSET"
-    echo ""
-else
-    echo ">>> Stage 1b: skipped (USE_LHQ=false)"
-    echo ""
-fi
 
 # ---------------------------------------------------------------------------
 # Stage 2 — thumbnail the shared clean directory
@@ -136,8 +119,7 @@ bash scripts/03_generate_mosaic.sh "$TARGET" \
 echo ""
 
 # ---------------------------------------------------------------------------
-# Final summary — the individual scripts already print their own
-# summaries, so we just add a top-level one pointing at the output.
+# Final summary
 # ---------------------------------------------------------------------------
 TARGET_BASENAME="${TARGET##*/}"
 TARGET_STEM="${TARGET_BASENAME%.*}"
