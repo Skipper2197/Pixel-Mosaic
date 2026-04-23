@@ -92,7 +92,7 @@ Pixel-Mosaic/
 ### Kaggle API Token
 
 1. Go to [kaggle.com/settings](https://www.kaggle.com/settings) → **API** → **Create New Token**. This downloads a `kaggle.json` file containing your token.
-2. Add the following to your `~/.bashrc`:
+2. Add the following to the bottom of your `~/.bashrc`:
 
 ```bash
 export KAGGLE_API_TOKEN=your_token_here
@@ -104,8 +104,7 @@ The download scripts check for this variable at startup and exit with a clear er
 
 ### Conda Environment
 
-The conda environment (`mosaic_env`) is created automatically the first time `02_build_thumbnails.sh` runs. To create it manually:
-
+Run the command below to create the conda enviroment for the project
 ```bash
 mamba env create -f environment.yaml
 conda activate mosaic_env
@@ -129,7 +128,7 @@ The pipeline supports building a mosaic from more than one image dataset. Each d
 ```bash
 SUBSET=500                           # images to use (500 for testing, 10000+ for quality)
 TARGET="data/target/your_image.jpg"  # path to your target image
-GRID_SIZE=100                        # cells per side of the mosaic grid
+GRID_SIZE=200                        # cells per side of the mosaic grid
 TILE_SIZE=32                         # pixel size of each tile
 ```
 
