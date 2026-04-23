@@ -61,7 +61,12 @@ mkdir -p output
 # script loads its own conda environment internally, so we don't
 # need to activate here.
 # ---------------------------------------------------------------------------
+source ~/.bashrc
+module load miniforge3
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate mosaic_env
 bash pipeline.sh
 
 echo ""
 echo "Job $SLURM_JOB_ID finished at $(date)"
+

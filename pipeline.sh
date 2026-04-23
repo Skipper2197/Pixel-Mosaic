@@ -44,7 +44,7 @@ SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
 # Number of images to keep from the downloaded dataset.
 # Small values (100-1000) are good for local testing.
 # Large values (10000+) produce better-looking mosaics on the HPC.
-SUBSET=500
+SUBSET=10000
 
 # Path to the target image you want to reproduce as a mosaic.
 # The output will be auto-named from this file's basename, e.g.:
@@ -53,7 +53,7 @@ TARGET="$SHARED_DIR/target/dwayne-johnson-walk-of-fame-honor.webp"
 
 # Mosaic grid and tile size (passed through to 03_generate_mosaic.sh).
 # Defaults match the project spec.
-GRID_SIZE=100
+GRID_SIZE=200
 TILE_SIZE=32
 
 # ---------------------------------------------------------------------------
