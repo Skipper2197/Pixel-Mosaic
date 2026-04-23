@@ -213,10 +213,17 @@ else
 
     FILE_LIST="$LOG_DIR/faces_extract_list.txt"
 
+    # Two-step listing to avoid a SIGPIPE under pipefail.
+    # If we pipe unzip -Z1 | grep | head, then head closes the pipe
+    # after SUBSET_SIZE lines and unzip gets SIGPIPE trying to write
+    # the next line. With 'set -o pipefail', that non-zero exit kills
+    # the script. Writing the full filtered list first, then taking
+    # the top N with head, avoids the broken pipe entirely.
     unzip -Z1 "$ZIP_FILE" \
         | grep -i '\.jpg$' \
-        | head -n "$SUBSET_SIZE" \
-        > "$FILE_LIST"
+        > "${FILE_LIST}.full"
+    head -n "$SUBSET_SIZE" "${FILE_LIST}.full" > "$FILE_LIST"
+    rm -f "${FILE_LIST}.full"
 
     EXTRACT_COUNT=$(wc -l < "$FILE_LIST")
     echo "     Will extract $EXTRACT_COUNT images."
