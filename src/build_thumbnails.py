@@ -33,10 +33,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import DEFAULT_TILE_SIZE, list_images
 
 
-def build_thumbnails(source_dir, thumb_dir, tile_size):
+def build_thumbnails(source_dir, thumb_dir, tile_size, prefix=""):
     """
     Iterate over source_dir, write tile_size x tile_size versions to
     thumb_dir. Skip any file that already exists in thumb_dir.
+
+    If prefix is given, only process files whose names start with that
+    string (e.g. 'face_', 'flower_'). This lets multiple datasets share
+    a single clean/ directory while thumbnailing each independently.
 
     Why resize twice (thumbnail then resize)?
         PIL's .thumbnail() preserves aspect ratio — a 1024x768 input
@@ -49,12 +53,15 @@ def build_thumbnails(source_dir, thumb_dir, tile_size):
 
     os.makedirs(thumb_dir, exist_ok=True)
 
-    raw_files = list_images(source_dir)
+    all_files = list_images(source_dir)
+    raw_files = [f for f in all_files if not prefix or f.startswith(prefix)]
     if not raw_files:
-        raise ValueError(f"No images found in {source_dir}")
+        qualifier = f" matching prefix '{prefix}'" if prefix else ""
+        raise ValueError(f"No images found{qualifier} in {source_dir}")
 
+    qualifier = f" matching prefix '{prefix}'" if prefix else ""
     print(f"Checking/creating {tile_size}x{tile_size} thumbnails "
-          f"for {len(raw_files)} images...")
+          f"for {len(raw_files)} images{qualifier}...")
 
     created = 0
     skipped_existing = 0
@@ -107,6 +114,11 @@ def parse_args():
         "--tile-size", type=int, default=DEFAULT_TILE_SIZE,
         help=f"Tile edge length in pixels (default: {DEFAULT_TILE_SIZE})."
     )
+    parser.add_argument(
+        "--prefix", default="",
+        help="Only process files whose names start with this string "
+             "(e.g. 'face_' to thumbnail only face images from a shared clean/ dir)."
+    )
     return parser.parse_args()
 
 
@@ -116,6 +128,7 @@ def main():
         source_dir=args.source_dir,
         thumb_dir=args.thumb_dir,
         tile_size=args.tile_size,
+        prefix=args.prefix,
     )
 
 

@@ -4,8 +4,8 @@
 # End-to-end orchestrator for the Pixel-Mosaic project.
 #
 # Runs every stage in order:
-#   01_download_clean.sh   — download + clean fake faces dataset
-#   02_build_thumbnails.sh — resize every clean image to a 32x32 tile
+#   01_*.sh                — download + clean selected dataset(s)
+#   02_build_thumbnails.sh — resize each dataset's images to tiles
 #   02b_build_database.sh  — build a LAB-color k-d tree over the tiles
 #   03_generate_mosaic.sh  — produce a mosaic of the target image
 #
@@ -21,13 +21,13 @@
 #
 # Design notes:
 #   - Stages 1-2b are "setup" — they produce the reusable tile library.
-#     Once the pickle exists at data/color_tree.pkl, you can generate
-#     many different mosaics without rebuilding anything upstream.
+#     Once the pickle exists, you can generate many different mosaics
+#     without rebuilding anything upstream.
 #   - Stage 3 is "usage" — it reads the pickle and produces one mosaic
 #     per target image. Cheap to re-run.
-#   - If you want a new mosaic from a different target image, the
-#     fastest path is to edit TARGET below and re-run pipeline.sh, OR
-#     to call scripts/03_generate_mosaic.sh directly with the new path.
+#   - Each dataset combination gets its own pickle, named automatically
+#     from DATASETS (e.g. color_trees/color_tree_faces-flowers.pkl).
+#     Switching datasets does not invalidate previously-built pickles.
 # =============================================================================
 
 set -ueo pipefail
@@ -41,7 +41,18 @@ SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
 # USER SETTINGS — edit these to change how the pipeline runs
 # ---------------------------------------------------------------------------
 
-# Number of images to keep from the downloaded dataset.
+# Which image datasets to use as mosaic tiles.
+# Space-separated list of one or more of: faces, flowers, animals
+#   faces   — AI-generated faces (1M Fake Faces dataset, ~15GB)
+#   flowers — Flowers-299 dataset
+#   animals — Animals-10 dataset
+# Examples:
+#   DATASETS="faces"                    # faces only
+#   DATASETS="flowers animals"          # mix two datasets
+#   DATASETS="faces flowers animals"    # use all three
+DATASETS="flowers"
+
+# Number of images to keep from each downloaded dataset.
 # Small values (100-1000) are good for local testing.
 # Large values (10000+) produce better-looking mosaics on the HPC.
 SUBSET=500
@@ -77,50 +88,66 @@ if [[ ! -f "$TARGET" ]]; then
     exit 1
 fi
 
+# Derive a slug from the dataset list (e.g. "faces flowers" → "faces-flowers")
+# and use it to name the pickle. This means each dataset combination gets its
+# own file — switching between "flowers" and "flowers animals" doesn't
+# require deleting anything.
+DATASETS_SLUG=$(echo "$DATASETS" | tr ' ' '-')
+PKL_PATH="color_trees/color_tree_${DATASETS_SLUG}.pkl"
+
 echo "============================================================"
 echo "  Pixel-Mosaic pipeline"
 echo "============================================================"
 echo "  Shared dir   : $SHARED_DIR"
-echo "  Subset size  : $SUBSET images"
+echo "  Datasets     : $DATASETS"
+echo "  Subset size  : $SUBSET images per dataset"
 echo "  Target       : $TARGET"
 echo "  Grid         : ${GRID_SIZE}x${GRID_SIZE}"
 echo "  Tile         : ${TILE_SIZE}x${TILE_SIZE}"
+echo "  Database     : $PKL_PATH"
 echo "============================================================"
 echo ""
 
 # ---------------------------------------------------------------------------
-# Stage 1 — fake faces download
+# Stage 1 — download selected datasets
 # ---------------------------------------------------------------------------
-echo ">>> Stage 1: download fake faces"
-bash scripts/01_download_clean.sh --subset "$SUBSET"
-echo ""
+for dataset in $DATASETS; do
+    case "$dataset" in
+        faces)
+            echo ">>> Stage 1: download faces"
+            bash scripts/01_download_clean.sh --subset "$SUBSET"
+            ;;
+        flowers)
+            echo ">>> Stage 1b: download flowers"
+            bash scripts/01b_download_flowers.sh --subset "$SUBSET"
+            ;;
+        animals)
+            echo ">>> Stage 1c: download animals"
+            bash scripts/01c_download_animals.sh --subset "$SUBSET"
+            ;;
+        *)
+            echo "[ERROR] Unknown dataset: '$dataset'"
+            echo "        Valid names: faces, flowers, animals"
+            exit 1
+            ;;
+    esac
+    echo ""
+done
 
 # ---------------------------------------------------------------------------
-# Stage 1b — flowers download
+# Stage 2 — build thumbnails for each selected dataset
 # ---------------------------------------------------------------------------
-echo ">>> Stage 1b: download flowers"
-bash scripts/01b_download_flowers.sh --subset "$SUBSET"
-echo ""
+for dataset in $DATASETS; do
+    echo ">>> Stage 2: build thumbnails for '$dataset'"
+    bash scripts/02_build_thumbnails.sh --dataset "$dataset" --tile-size "$TILE_SIZE"
+    echo ""
+done
 
 # ---------------------------------------------------------------------------
-# Stage 1c — animals download
+# Stage 2b — build the LAB k-d tree over the selected thumbnail directories
 # ---------------------------------------------------------------------------
-echo ">>> Stage 1c: download animals"
-bash scripts/01c_download_animals.sh --subset "$SUBSET"
-echo ""
-
-# ---------------------------------------------------------------------------
-# Stage 2 — thumbnail the shared clean directory
-# ---------------------------------------------------------------------------
-echo ">>> Stage 2: build 32x32 thumbnails"
-bash scripts/02_build_thumbnails.sh --tile-size "$TILE_SIZE"
-echo ""
-
-# ---------------------------------------------------------------------------
-# Stage 2b — build the LAB k-d tree
-# ---------------------------------------------------------------------------
-echo ">>> Stage 2b: build LAB k-d tree"
-bash scripts/02b_build_database.sh
+echo ">>> Stage 2b: build LAB k-d tree ($DATASETS)"
+bash scripts/02b_build_database.sh --datasets "$DATASETS" --pkl-path "$PKL_PATH"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -128,6 +155,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo ">>> Stage 3: generate mosaic"
 bash scripts/03_generate_mosaic.sh "$TARGET" \
+    --pkl-path "$PKL_PATH" \
     --grid-size "$GRID_SIZE" \
     --tile-size "$TILE_SIZE"
 echo ""
@@ -142,5 +170,7 @@ OUTPUT_PATH="output/mosaic_${TARGET_STEM}.jpg"
 echo "============================================================"
 echo "  Pipeline complete"
 echo "------------------------------------------------------------"
-echo "  Final mosaic : $OUTPUT_PATH"
+echo "  Datasets used : $DATASETS"
+echo "  Database      : $PKL_PATH"
+echo "  Final mosaic  : $OUTPUT_PATH"
 echo "============================================================"

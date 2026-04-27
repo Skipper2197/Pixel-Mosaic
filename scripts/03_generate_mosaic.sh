@@ -41,7 +41,7 @@ set -ueo pipefail
 SHARED_DIR="/sciclone/scr10/gzdata440/Pixel-Mosaic/data"
 
 ENV_NAME="mosaic_env"
-PKL_PATH="$SHARED_DIR/color_tree.pkl"
+PKL_PATH=""                                # set by --pkl-path; required
 OUTPUT_DIR="output"
 GRID_SIZE=100                              # defaults; overridden by flags
 TILE_SIZE=32
@@ -74,9 +74,13 @@ while [[ $# -gt 0 ]]; do
             TILE_SIZE="$2"
             shift 2
             ;;
+        --pkl-path)
+            PKL_PATH="$2"
+            shift 2
+            ;;
         --*)
             echo "Unknown flag: $1"
-            echo "Usage: bash scripts/03_generate_mosaic.sh <target-image> [--grid-size N] [--tile-size N]"
+            echo "Usage: bash scripts/03_generate_mosaic.sh <target-image> [--pkl-path PATH] [--grid-size N] [--tile-size N]"
             exit 1
             ;;
         *)
@@ -93,16 +97,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---------------------------------------------------------------------------
-# Validate required positional argument
+# Validate required arguments
 # ---------------------------------------------------------------------------
 if [[ -z "$TARGET_IMAGE" ]]; then
     echo "[ERROR] No target image specified."
     echo ""
     echo "Usage:"
-    echo "  bash scripts/03_generate_mosaic.sh <target-image> [--grid-size N] [--tile-size N]"
+    echo "  bash scripts/03_generate_mosaic.sh <target-image> --pkl-path PATH [--grid-size N] [--tile-size N]"
     echo ""
     echo "Example:"
-    echo "  bash scripts/03_generate_mosaic.sh data/target/rock.jpg"
+    echo "  bash scripts/03_generate_mosaic.sh data/target/rock.jpg --pkl-path color_trees/color_tree_faces.pkl"
+    exit 1
+fi
+
+if [[ -z "$PKL_PATH" ]]; then
+    echo "[ERROR] --pkl-path is required."
+    echo "        Run 02b_build_database.sh first to build a database, then pass its path here."
+    echo ""
+    echo "Example:"
+    echo "  bash scripts/03_generate_mosaic.sh data/target/rock.jpg --pkl-path color_trees/color_tree_faces.pkl"
     exit 1
 fi
 

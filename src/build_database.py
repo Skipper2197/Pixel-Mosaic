@@ -38,10 +38,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import get_avg_lab_centered, list_images
 
 
-def build_database(thumb_dir, pkl_path, force=False):
+def build_database(thumb_dirs, pkl_path, force=False):
     """
     Build a k-d tree over the average LAB colors of every thumbnail
-    in thumb_dir and pickle it to pkl_path.
+    across one or more thumb_dirs and pickle it to pkl_path.
+
+    thumb_dirs may be a single path string or a list of paths. Passing
+    multiple directories lets you combine datasets (faces + flowers +
+    animals) into one tree without merging the files on disk.
 
     The pickled object is a dict with two keys:
         'tree'      : scipy.spatial.KDTree indexed by LAB position
@@ -55,23 +59,35 @@ def build_database(thumb_dir, pkl_path, force=False):
         downside — pickle is Python-specific — is fine here because
         both writer and reader are Python scripts in the same repo.
     """
+    # Normalise to a list so the rest of the code is uniform
+    if isinstance(thumb_dirs, str):
+        thumb_dirs = [thumb_dirs]
+
     # Idempotency check — skip if already built
     if os.path.exists(pkl_path) and not force:
         print(f"Database already exists at {pkl_path}")
         print(f"(delete the file or pass --force to rebuild)")
         return
 
-    if not os.path.isdir(thumb_dir):
-        raise FileNotFoundError(f"Thumbnail directory not found: {thumb_dir}")
+    for thumb_dir in thumb_dirs:
+        if not os.path.isdir(thumb_dir):
+            raise FileNotFoundError(f"Thumbnail directory not found: {thumb_dir}")
 
     # Ensure parent directory for pkl_path exists
     os.makedirs(os.path.dirname(pkl_path) or ".", exist_ok=True)
 
-    thumb_files = list_images(thumb_dir)
-    if not thumb_files:
-        raise ValueError(f"No thumbnails found in {thumb_dir}")
+    # Collect files from every directory
+    all_paths = []
+    for thumb_dir in thumb_dirs:
+        thumb_files = list_images(thumb_dir)
+        all_paths.extend(os.path.join(thumb_dir, f) for f in thumb_files)
 
-    print(f"Indexing {len(thumb_files)} thumbnails in LAB space...")
+    if not all_paths:
+        dirs_str = ", ".join(thumb_dirs)
+        raise ValueError(f"No thumbnails found in: {dirs_str}")
+
+    print(f"Indexing {len(all_paths)} thumbnails across "
+          f"{len(thumb_dirs)} director{'y' if len(thumb_dirs) == 1 else 'ies'}...")
 
     # We accumulate two parallel lists and then convert to arrays.
     # Appending to lists is O(1) amortized; building a numpy array
@@ -80,8 +96,7 @@ def build_database(thumb_dir, pkl_path, force=False):
     lab_values = []
     failed = 0
 
-    for filename in tqdm(thumb_files, desc="Building LAB tree"):
-        path = os.path.join(thumb_dir, filename)
+    for path in tqdm(all_paths, desc="Building LAB tree"):
         lab = get_avg_lab_centered(path)
 
         if lab is not None:
@@ -118,12 +133,14 @@ def parse_args():
         description="Build a LAB-color k-d tree over a directory of thumbnails."
     )
     parser.add_argument(
-        "--thumb-dir", required=True,
-        help="Directory of square thumbnail images (output of build_thumbnails.py)."
+        "--thumb-dir", nargs='+', required=True,
+        help="One or more directories of square thumbnail images. "
+             "Pass multiple paths to combine datasets into a single tree "
+             "(e.g. --thumb-dir data/thumbnails/faces data/thumbnails/flowers)."
     )
     parser.add_argument(
         "--pkl-path", required=True,
-        help="Output path for the pickled k-d tree (e.g. data/color_tree.pkl)."
+        help="Output path for the pickled k-d tree (e.g. color_trees/color_tree_faces.pkl)."
     )
     parser.add_argument(
         "--force", action="store_true",
@@ -135,7 +152,7 @@ def parse_args():
 def main():
     args = parse_args()
     build_database(
-        thumb_dir=args.thumb_dir,
+        thumb_dirs=args.thumb_dir,
         pkl_path=args.pkl_path,
         force=args.force,
     )
