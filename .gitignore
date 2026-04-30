@@ -1,5 +1,7 @@
 data/raw/*
 !data/raw/README.md
+data/thumbnails/*
+!data/thumbnails/README.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
