@@ -36,7 +36,7 @@ Face images have significant background and clothing around the subject. Croppin
 
 **Mosaic Output:**
 
-![Mosaic](output/mosaic_lab_slurm_flowers.jpg)
+![Mosaic](output/mosaic_dwayne-johnson-walk-of-fame-honor.jpg)
 
 ---
 
@@ -45,12 +45,14 @@ Face images have significant background and clothing around the subject. Croppin
 ```text
 Pixel-Mosaic/
 │
-├── pipeline.sh                  # Top-level orchestrator — run this
-├── mosaic.slurm                 # SLURM job script for SciClone
+├── pipeline.sh                  # Top-level orchestrator — called by mosaic.slurm
+├── mosaic.slurm                 # SLURM job script — run this to launch the pipeline
 ├── environment.yaml             # Conda environment definition
 │
 ├── scripts/                     # Bash wrappers for each pipeline stage
 │   ├── 01_download_clean.sh     # Stage 1: Download and validate face images
+│   ├── 01b_download_flowers.sh  # Stage 1b: Download and validate flower images
+│   ├── 01c_download_animals.sh  # Stage 1c: Download and validate animal images
 │   ├── 02_build_thumbnails.sh   # Stage 2: Resize images to square tiles
 │   ├── 02b_build_database.sh    # Stage 2b: Build LAB k-d tree → color_tree.pkl
 │   └── 03_generate_mosaic.sh    # Stage 3: Generate the mosaic JPEG
@@ -66,8 +68,9 @@ Pixel-Mosaic/
 ├── data/                        # All data files (mostly gitignored)
 │   ├── raw/                     # Downloaded zips + extracted images
 │   ├── thumbnails/              # 32×32 tiles, one subdir per dataset
-│   │   ├── face_thumbnails/     # AI-generated faces
-│   │   └── flowers_thumbnails/  # flower photos (and other datasets)
+│   │   ├── faces/               # AI-generated faces
+│   │   ├── flowers/             # flower photos
+│   │   └── animals/             # animal photos
 │   └── target/                  # Target image(s) to mosaicify
 │
 ├── color_trees/                 # Pickled k-d tree databases (.pkl, gitignored)
@@ -104,7 +107,8 @@ The download scripts check for this variable at startup and exit with a clear er
 
 ### Conda Environment
 
-Run the command below to create the conda enviroment for the project
+To create the Conda environment manually, run the following commands:
+
 ```bash
 mamba env create -f environment.yaml
 conda activate mosaic_env
@@ -116,33 +120,66 @@ The environment includes: Python 3.12, NumPy, SciPy, scikit-image, Pillow, and t
 
 ## Running the Pipeline
 
-### Using Multiple Datasets
-
-The pipeline supports building a mosaic from more than one image dataset. Each dataset gets its own subdirectory under `data/thumbnails/` (e.g. `face_thumbnails/`, `flowers_thumbnails/`). When building the k-d tree, `02b_build_database.sh` points at whichever thumbnail directories you want to include — combining them produces a richer, more colorful tile library. See the `--thumb-dir` argument in `src/build_database.py` for how to specify multiple sources.
-
 ### Quickstart
 
-1. Place your target image in `data/target/`.
-2. Edit the `USER SETTINGS` block at the top of `pipeline.sh`:
+1. Place your target image in `data/target/` on the shared SciClone scratch directory.
+
+2. Open `mosaic.slurm` and update the `--mail-user` field with your email address.
+
+3. Open `pipeline.sh` and edit the **USER SETTINGS** block at the top:
 
 ```bash
-SUBSET=500                           # images to use (500 for testing, 10000+ for quality)
-TARGET="data/target/your_image.jpg"  # path to your target image
-GRID_SIZE=200                        # cells per side of the mosaic grid
-TILE_SIZE=32                         # pixel size of each tile
+# Which image datasets to use as mosaic tiles.
+# Space-separated list of one or more of: faces, flowers, animals
+DATASETS="flowers"
+
+# Number of images to keep from each downloaded dataset.
+SUBSET=500
+
+# Path to the target image you want to reproduce as a mosaic.
+TARGET="$SHARED_DIR/target/your_image.jpg"
+
+# Mosaic grid and tile size.
+GRID_SIZE=100
+TILE_SIZE=32
 ```
 
-3. Run from the project root:
+**Dataset options:**
+
+| Name | Description |
+|---|---|
+| `faces` | AI-generated faces (1M Fake Faces dataset, ~15 GB) |
+| `flowers` | Flowers-299 dataset |
+| `animals` | Animals-10 dataset |
+
+You can use one or combine multiple:
+```bash
+DATASETS="flowers"                  # flowers only
+DATASETS="flowers animals"          # mix two datasets
+DATASETS="faces flowers animals"    # use all three
+```
+
+Each unique combination of datasets gets its own k-d tree pickle (e.g. `color_trees/color_tree_faces-flowers.pkl`), so switching between combinations does not invalidate previously built databases.
+
+4. Submit to SciClone:
 
 ```bash
-bash pipeline.sh
+cd ~/Pixel-Mosaic
+sbatch mosaic.slurm
 ```
 
-4. The output will be at `output/mosaic_<target-name>.jpg`.
+5. Monitor your job:
+
+```bash
+squeue -u $USER
+tail -f output/pixel_<JOBID>.out
+```
+
+The output mosaic will be saved to `output/mosaic_<target-name>.jpg`.
 
 ### Idempotency
 
-Every stage is idempotent — re-running `pipeline.sh` skips work that's already done:
+Every stage is idempotent — re-running will skip any work already done:
 
 - Downloads are guarded by stamp files inside `data/raw/`. Delete the stamp to force a re-download.
 - Thumbnails are skipped if the file already exists in its dataset subdirectory under `data/thumbnails/`.
@@ -154,7 +191,9 @@ Every stage is idempotent — re-running `pipeline.sh` skips work that's already
 Once the tile library is built, you can generate a new mosaic without re-running the full pipeline:
 
 ```bash
-bash scripts/03_generate_mosaic.sh data/target/new_image.jpg --grid-size 150
+bash scripts/03_generate_mosaic.sh data/target/new_image.jpg \
+    --pkl-path color_trees/color_tree_flowers.pkl \
+    --grid-size 150
 ```
 
 ---
@@ -163,26 +202,20 @@ bash scripts/03_generate_mosaic.sh data/target/new_image.jpg --grid-size 150
 
 | Script | Purpose | Key flags |
 |---|---|---|
-| `pipeline.sh` | Runs all stages in order | Edit `USER SETTINGS` at the top |
+| `mosaic.slurm` | Submits the full pipeline to SciClone as a batch job | Edit `--mail-user` before submitting |
+| `pipeline.sh` | Runs all stages in order; called by `mosaic.slurm` | Edit `USER SETTINGS` at the top |
 | `01_download_clean.sh` | Downloads and validates face images | `--subset N` |
-| `02_build_thumbnails.sh` | Resizes images to square tiles; creates conda env | `--tile-size N` |
-| `02b_build_database.sh` | Builds LAB k-d tree and pickles it | `--force` |
-| `03_generate_mosaic.sh` | Generates the final mosaic | `<target> --grid-size N --tile-size N` |
+| `01b_download_flowers.sh` | Downloads and validates flower images | `--subset N` |
+| `01c_download_animals.sh` | Downloads and validates animal images | `--subset N` |
+| `02_build_thumbnails.sh` | Resizes images to square tiles | `--dataset NAME`, `--tile-size N` |
+| `02b_build_database.sh` | Builds LAB k-d tree and pickles it | `--datasets "NAME..."`, `--force` |
+| `03_generate_mosaic.sh` | Generates the final mosaic | `<target>`, `--pkl-path PATH`, `--grid-size N`, `--tile-size N` |
 
 ---
 
 ## HPC / SLURM
 
 `mosaic.slurm` submits the full pipeline to SciClone as a batch job. It requests 32 CPUs and 64 GB of RAM. The Python code reads `$SLURM_CPUS_PER_TASK` automatically to set the number of parallel tile-loading workers, so the CPU count only needs to be set in one place.
-
-```bash
-# Edit --mail-user in mosaic.slurm first, then:
-sbatch mosaic.slurm
-
-# Monitor your job
-squeue -u $USER
-tail -f output/pixel_<JOBID>.out
-```
 
 All data paths in the SLURM workflow point to the shared scratch directory (`/sciclone/scr10/gzdata440/Pixel-Mosaic/data`) so the full dataset doesn't need to be duplicated per user.
 
@@ -210,15 +243,13 @@ This produces a 4,800×4,800 px canvas from 22,500 tile placements, drawing from
 ## Quick Reference
 
 ```bash
-# Run the full pipeline
-bash pipeline.sh
-
-# Generate a new mosaic from an existing tile library
-bash scripts/03_generate_mosaic.sh data/target/myimage.jpg
+# Submit the full pipeline to SciClone (recommended)
+sbatch mosaic.slurm
 
 # Force rebuild the k-d tree (e.g. after adding new tiles)
-bash scripts/02b_build_database.sh --force
+bash scripts/02b_build_database.sh --datasets "flowers" --force
 
-# Submit to HPC
-sbatch mosaic.slurm
+# Generate a new mosaic from an existing tile library
+bash scripts/03_generate_mosaic.sh data/target/myimage.jpg \
+    --pkl-path color_trees/color_tree_flowers.pkl
 ```
